@@ -1,0 +1,62 @@
+import typer
+
+from src.core.factory import discover_scanners, registry
+from src.core.pipeline import ExecutionPlan, SecurityPipeline
+from src.core.demo import init_demo_assets
+from src.scanners.base import ScannerCategory
+
+app = typer.Typer(add_completion=False)
+
+
+def _build_plan(mode: str, only: str, continue_on_fail: bool) -> ExecutionPlan:
+    if mode == "only":
+        category = ScannerCategory(only)
+        return ExecutionPlan(categories=[category], continue_on_fail=continue_on_fail)
+
+    categories = [ScannerCategory.SANITY, ScannerCategory.STATS, ScannerCategory.MODEL]
+    if mode == "all":
+        return ExecutionPlan(categories=categories, continue_on_fail=True)
+
+    return ExecutionPlan(categories=categories, continue_on_fail=False, model_requires_previous_pass=True)
+
+
+@app.command()
+def scan(
+    dataset: str = typer.Option("data/train.parquet", help="Путь к датасету (внутри data/)"),
+    model: str = typer.Option("models/model.pt", help="Путь к модели (внутри models/)"),
+    mode: str = typer.Option(
+        "default",
+        help="default: sanity+stats, model только если прошло; all: запустить все; only: одна категория",
+        case_sensitive=False,
+    ),
+    only: str = typer.Option(
+        "sanity",
+        help="Категория для режима only: sanity, stats, model",
+        case_sensitive=False,
+    ),
+    continue_on_fail: bool = typer.Option(
+        False,
+        help="Продолжать выполнение при ошибках (актуально для only/all)",
+    ),
+):
+    discover_scanners()
+    plan = _build_plan(mode.lower(), only.lower(), continue_on_fail)
+    scanners = registry.build(plan.categories)
+    pipeline = SecurityPipeline(scanners)
+
+    report = pipeline.execute(dataset, model, plan)
+
+    if report.overall_status.value != "passed":
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def init_demo() -> None:
+    """Create demo dataset and model under data/ and models/."""
+    dataset_path, model_path = init_demo_assets()
+    print(f"Demo dataset created: {dataset_path}")
+    print(f"Demo model created: {model_path}")
+
+
+if __name__ == "__main__":
+    app()

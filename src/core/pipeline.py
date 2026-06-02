@@ -1,0 +1,77 @@
+import uuid
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Iterable, List, Optional, Sequence
+
+from src.core.loaders import load_dataset, load_model, project_root
+from src.core.report import ReportWriter, build_report, ScanReport
+from src.scanners.base import BaseScanner, ScanContext, ScanResult, ScannerCategory
+
+
+@dataclass
+class ExecutionPlan:
+    categories: Sequence[ScannerCategory]
+    continue_on_fail: bool = False
+    model_requires_previous_pass: bool = False
+
+
+class SecurityPipeline:
+    def __init__(self, scanners: Iterable[BaseScanner]):
+        self.scanners = list(scanners)
+
+    def _filter_scanners(self, categories: Sequence[ScannerCategory]) -> List[BaseScanner]:
+        return [scanner for scanner in self.scanners if scanner.category in categories]
+
+    def execute(
+        self,
+        dataset_path: str,
+        model_path: str,
+        plan: ExecutionPlan,
+        reports_dir: Optional[Path] = None,
+    ) -> ScanReport:
+        run_id = uuid.uuid4().hex[:8]
+        results: List[ScanResult] = []
+        report_writer = ReportWriter(reports_dir or project_root() / "reports")
+
+        dataset_bundle = load_dataset(dataset_path)
+        context = ScanContext(
+            dataset_path=dataset_bundle.path,
+            model_path=model_path,
+            dataset=dataset_bundle.data,
+        )
+        model_loaded = False
+
+        scanners = self._filter_scanners(plan.categories)
+        scanners_by_category = {
+            category: [scanner for scanner in scanners if scanner.category == category]
+            for category in plan.categories
+        }
+
+        for category in plan.categories:
+            category_failed = False
+            for scanner in scanners_by_category.get(category, []):
+                print(f"⏳ Running: {scanner.name} ({scanner.category.value})")
+                if scanner.category == ScannerCategory.MODEL and not model_loaded:
+                    model_bundle = load_model(model_path)
+                    context.model_path = model_bundle.path
+                    context.model_state = model_bundle.state_dict
+                    context.metadata.update(model_bundle.metadata)
+                    model_loaded = True
+
+                result = scanner.run(context)
+                results.append(result)
+
+                print("✅ Passed" if result.passed else "❌ Failed")
+                if not result.passed:
+                    category_failed = True
+
+            if category_failed:
+                if plan.model_requires_previous_pass and category in {ScannerCategory.SANITY, ScannerCategory.STATS}:
+                    break
+                if not plan.continue_on_fail:
+                    break
+
+        report = build_report(run_id, context.dataset_path, context.model_path, results)
+        report_path = report_writer.write(report)
+        print(f"🧾 Report saved: {report_path}")
+        return report
