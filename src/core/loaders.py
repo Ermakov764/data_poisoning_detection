@@ -56,6 +56,8 @@ def load_dataset(raw_path: str) -> DatasetBundle:
         data = pd.read_csv(path)
     elif path.suffix.lower() == ".parquet":
         data = pd.read_parquet(path)
+    elif path.suffix.lower() == ".jsonl":
+        data = pd.read_json(path, lines=True)
     else:
         raise ValueError(f"Unsupported dataset format: {path.suffix}")
     return DatasetBundle(data=data, path=str(path))

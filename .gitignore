@@ -1,7 +1,11 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
+*/__pycache__/
 *.py[cod]
 *$py.class
+
+Notes
+drafts
 
 # C extensions
 *.so
@@ -108,6 +112,7 @@ credentials/
 *.pt
 *.onnx
 models/
+reports/
 datasets/
 data/
 checkpoints/
