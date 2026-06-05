@@ -38,10 +38,25 @@ def scan(
         False,
         help="Продолжать выполнение при ошибках (актуально для only/all)",
     ),
+    reference: str = typer.Option(
+        None,
+        help="Режим 2: опорная модель для model_diff (абсолютный вердикт)",
+    ),
+    clean_data: str = typer.Option(
+        None,
+        help="Режим 2: чистый сэмпл данных для калибровки порогов Spectral/AC/RPP",
+    ),
 ):
     discover_scanners()
     plan = _build_plan(mode.lower(), only.lower(), continue_on_fail)
     scanners = registry.build(plan.categories)
+
+    for s in scanners:
+        if hasattr(s, "reference_model_path"):
+            s.reference_model_path = reference
+        if hasattr(s, "clean_data_path"):
+            s.clean_data_path = clean_data
+
     pipeline = SecurityPipeline(scanners)
 
     report = pipeline.execute(dataset, model, plan)
