@@ -83,9 +83,9 @@ python -m src.cli scan --mode only --only stats  --dataset data/train.csv
 python -m src.cli scan --mode only --only model  --dataset data/train.csv --model models/model.pt
 ```
 
-### Режим 2 — сравнение с опорной моделью
+### Режим 2 — сравнение с опорной моделью (NLP)
 
-Используется когда есть проверенная старая модель. Включает `model_diff` и калибровку порогов Spectral/AC/RPP.
+Используется когда есть проверенная старая модель. Включает `model_diff` и калибровку порогов SPECTRE/AC/RPP.
 
 ```bash
 python -m src.cli scan \
@@ -93,6 +93,30 @@ python -m src.cli scan \
     --model models/new_model.pt \
     --reference models/trusted_model.pt \
     --clean-data data/clean_sample.csv
+```
+
+### Режим 2 — табличные данные без готовой модели
+
+Если модели ещё нет, `--target` автоматически обучит MLP с общей стандартизацией прямо внутри команды. `--reference` здесь — это путь к **чистому CSV**, а не к модели.
+
+```bash
+# Только кандидат (режим 1 — триаж, без калиброванного вердикта)
+python -m src.cli scan \
+    --dataset data/candidate.csv \
+    --target label_column
+
+# Кандидат + чистый эталон (режим 2 — калиброванный вердикт ALLOW/REVIEW/BLOCK)
+python -m src.cli scan \
+    --dataset data/candidate.csv \
+    --reference data/clean.csv \
+    --target label_column
+
+# Если в датасете есть служебные колонки (индекс, ID и т.п.)
+python -m src.cli scan \
+    --dataset data/candidate.csv \
+    --reference data/clean.csv \
+    --target label_column \
+    --drop id,timestamp
 ```
 
 ### Демо-запуск без своих данных
@@ -130,7 +154,8 @@ src/
 │   ├── pipeline.py                 # оркестратор запуска сканеров
 │   ├── factory.py                  # реестр сканеров (@register_scanner)
 │   ├── loaders.py                  # загрузка датасетов и моделей
-│   └── features.py                 # векторизация для статистических методов
+│   ├── features.py                 # векторизация для статистических методов
+│   └── tabular_prep.py             # авто-обучение MLP для табличного режима 2
 └── scanners/
     ├── sanity/
     │   ├── dataset_guard/          # движок sanity-проверок
