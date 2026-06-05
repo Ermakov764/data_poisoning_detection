@@ -90,12 +90,8 @@ class SecurityPipeline:
             print("✅ Passed")
             return
 
-        if result.status == ScanStatus.SKIPPED:
-            print("⏭️  Skipped")
-            return
-
         if result.status == ScanStatus.HAND_CHECK:
-            print("⚠️  Review")
+            print("⚠️ Review")
             return
 
         print("❌ Failed")
